@@ -1,27 +1,36 @@
 package clientCode;
 
-import anotacije.definicije.Controller;
-import anotacije.definicije.Get;
-import anotacije.definicije.Path;
-import anotacije.definicije.Post;
+import anotacije.definicije.*;
 
 @Controller
 public class MojaKlasa {
 
+    @Autowired(verbose = false)
+    private String mojePolje = "moje polje";
+
+    @Autowired(verbose = false)
+    private MojServis mojServis;
+
+    @Autowired(verbose = false)
+    private MojBean mojBean;
+
+    private String neAnotiranoPolje = "moje neanotirano polje";
+
+
     public MojaKlasa(){
-        System.out.println("Pozvan konstruktor MojaKlasa");
+        System.out.println("Pozvan konstruktor -----------> mojaKlasa Controler");
     }
 
     @Get
     @Path("/")
     public void ruta1(){
-        System.out.println("pozvana metoda");
+        mojBean.mojTest();
     }
 
     @Get
     @Path("/NNN")
     public void gsdgsdgsdgssdgsd(){
-        System.out.println("NOVA METODA SA NNN pozvanan");
+        mojServis.test();
     }
 
 }

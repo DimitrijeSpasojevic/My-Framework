@@ -53,7 +53,6 @@ public class ServerThread implements Runnable{
             Set<Class> allClasses = diEngine.findAllClassesUsingClassLoader("clientCode");
             diEngine.initializeControllers(allClasses);
             diEngine.mapRequestToMethodOfController(request);
-            System.out.println(allClasses);
 
             // Response example
             Map<String, Object> responseMap = new HashMap<>();
@@ -69,6 +68,8 @@ public class ServerThread implements Runnable{
             socket.close();
 
         } catch (IOException | RequestNotValidException e) {
+            e.printStackTrace();
+        } catch (IllegalAccessException e) {
             e.printStackTrace();
         }
     }
