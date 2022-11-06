@@ -3,12 +3,11 @@ package clientCode;
 
 import anotacije.definicije.Autowired;
 import anotacije.definicije.Bean;
+import enums.Scope;
 
-@Bean
+@Bean(scope = Scope.SINGLETON)
 public class MojBean {
 
-    @Autowired(verbose = true)
-    private DrugiServis drugiServis;
 
     public MojBean(){
         System.out.println("Pozvao se konstruktor ------------------> MojBean");

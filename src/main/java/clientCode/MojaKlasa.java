@@ -5,13 +5,16 @@ import anotacije.definicije.*;
 @Controller
 public class MojaKlasa {
 
-    @Autowired(verbose = false)
-    private String mojePolje = "moje polje";
 
-    @Autowired(verbose = false)
-    private MojServis mojServis;
+    @Autowired(verbose = true)
+    private MojServis verzija2ServicaKojiTrebaIstiDaBude;
 
-    @Autowired(verbose = false)
+    @Autowired(verbose = true)
+    @Qualifier("dva")
+    private MojInterfejs mojInterfejs11;
+
+
+    @Autowired(verbose = true)
     private MojBean mojBean;
 
     private String neAnotiranoPolje = "moje neanotirano polje";
@@ -25,12 +28,13 @@ public class MojaKlasa {
     @Path("/")
     public void ruta1(){
         mojBean.mojTest();
+        mojInterfejs11.metodaUinterfejsu();
     }
 
     @Get
     @Path("/NNN")
     public void gsdgsdgsdgssdgsd(){
-        mojServis.test();
+        verzija2ServicaKojiTrebaIstiDaBude.test();
     }
 
 }

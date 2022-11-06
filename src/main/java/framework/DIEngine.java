@@ -1,7 +1,9 @@
 package framework;
 
 import anotacije.definicije.*;
+import enums.Scope;
 import framework.request.Request;
+import framework.request.exceptions.MyException;
 import lombok.Synchronized;
 
 import java.io.BufferedReader;
@@ -24,6 +26,7 @@ public class DIEngine {
     private Map<Class,Object> mapClasObjectService= new ConcurrentHashMap<>();
     private Map<Object,List<Class>> map= new ConcurrentHashMap<>();
     private Collection<Object> objects = Collections.synchronizedCollection(new ArrayList<>());
+    private DependencyContainer container = new DependencyContainer();
     public DIEngine(){
 
     }
@@ -49,7 +52,8 @@ public class DIEngine {
     }
 
     @Synchronized
-    public void initializeControllers(Set<Class> classSet) throws IllegalAccessException {
+    public void initializeControllers(Set<Class> classSet) throws IllegalAccessException, NoSuchMethodException, InvocationTargetException, InstantiationException {
+
         for(Class c : classSet){
             if (c.isAnnotationPresent(Controller.class)) {
                 try {
@@ -57,9 +61,10 @@ public class DIEngine {
                         Constructor constructor = c.getDeclaredConstructor();
                         controllers.add(c);
                         Object o = constructor.newInstance();
+                        objects.add(o);
                         mapClasObjectController.put(c, o);
                         controllersNamesList.add(c.getName());
-                        initAutowiredFields( null , c, false, "Controller");
+                        initAutoWiredFields(c);
                     }
                 } catch (NoSuchMethodException e) {
                     e.printStackTrace();
@@ -67,92 +72,113 @@ public class DIEngine {
                     e.printStackTrace();
                 }
             }else{
-//                System.out.println("klasa nadjena ali nije kontroler, nego klasa" + c.getName() + "i ima anotacije -> "+c.getAnnotations());
+                if(c.isAnnotationPresent(Qualifier.class)){
+                    Qualifier qualifier = (Qualifier) c.getDeclaredAnnotation(Qualifier.class);
+                    if(container.qualifierAlreadyExist(qualifier.value())) throw new MyException("QualifierAlreadyExistException -> Vec postoji qualifier sa \"" + qualifier.value() + "\" imenom");
+                    else this.container.addImplementationInMap(qualifier.value(), c.getDeclaredConstructor().newInstance());
+                }
+            }
+        }
+        List<Object> objs = new ArrayList<>();
+        objs.addAll(objects);
+        for (Object objectToInitializeFields : objs){
+            List<Field> fields = List.of(objectToInitializeFields.getClass().getDeclaredFields());
+            List<Field> autoWiredFields = fields.stream().filter(fi -> fi.isAnnotationPresent(Autowired.class)).collect(Collectors.toList());
+            for (Field f : autoWiredFields){
+                f.setAccessible(true);
+                Object objToSet = null;
+                if(f.isAnnotationPresent(Qualifier.class)){
+                    Qualifier qualifier = f.getAnnotation(Qualifier.class);
+                    objToSet = container.getImplementation(qualifier.value());
+                    if(objToSet.getClass().isAnnotationPresent(Component.class)){
+                        objToSet = objToSet.getClass().getDeclaredConstructor().newInstance();
+                    }else if(objToSet.getClass().isAnnotationPresent(Bean.class)){
+                        Bean bean = objToSet.getClass().getDeclaredAnnotation(Bean.class);
+                        if(bean.scope().equals(Scope.PROTOTYPE)){
+                            objToSet = objToSet.getClass().getDeclaredConstructor().newInstance();
+                        }
+                    }
+                }else {
+                    objToSet = findObjectOfClass(f.getType());
+                }
+                f.set(objectToInitializeFields,objToSet);
+                Autowired autowired = f.getAnnotation(Autowired.class);
+                if(autowired.verbose()) {
+//                  “Initialized <param.object.type> <param.name> in <param.parentClass.name> on <localDateTime.now()> with <param.instance.hashCode>”
+                    System.out.println("Initialized " + f.getType() + " " + f.getName() + " in " + objectToInitializeFields.getClass().getName() + " on " + LocalDateTime.now() + " with " + objToSet.hashCode());
+                }
             }
         }
     }
 
     private Object findObjectOfClass(Class cl){
+        boolean singletonObject = true;
         for(Object o : objects){
             if(o.getClass().equals(cl)){
+                if(o.getClass().isAnnotationPresent(Component.class)){
+                    singletonObject = false;
+                }else if(o.getClass().isAnnotationPresent(Bean.class)){
+                    Bean bean = o.getClass().getDeclaredAnnotation(Bean.class);
+                    if(bean.scope().equals(Scope.PROTOTYPE)){
+                        singletonObject = false;
+                    }
+                }
+                if(!singletonObject){
+                    objects.remove(o);
+                }
                 return o;
             }
         }
         return null;
     }
 
-//cFireld controler na pocetku
-    private void initAutowiredFields(Class parentClass, Class cField, boolean verbose, String fieldName) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
-        if(!cField.isAnnotationPresent(Controller.class) && !parentClass.isAnnotationPresent(Controller.class)) {
-            Object whichObjectToSet = null;
+    private void initAutoWiredFields(Class klasaZaKojuSePraviObjekat) throws NoSuchMethodException, InvocationTargetException, InstantiationException, IllegalAccessException {
+        if(!klasaZaKojuSePraviObjekat.isAnnotationPresent(Controller.class) && !klasaZaKojuSePraviObjekat.isInterface()){
 
-            whichObjectToSet = parentClass.getDeclaredConstructor().newInstance();
-            objects.add(whichObjectToSet);
-//                if(c.isAnnotationPresent(Service.class)){
-//                    if(!mapClasObjectService.containsKey(c)){
-//                        Object service = c.getConstructor().newInstance();
-//                        mapClasObjectService.put(c,service);
-//                        Field field = parentClass.getDeclaredField(fieldName);
-//                    }else{
-////                        c. = mapClasObjectService.get(c)??
-//                    }
-//                }
-//                else if(c.isAnnotationPresent(Component.class)) {
-//                    Object obj = c.getConstructor().newInstance();
-//                }
-            // pamtimo komObjektuSEtujem
-            if(map.get(whichObjectToSet) == null){
-                List<Class> klase = new ArrayList<>();
-                klase.add(cField);
-                map.put(whichObjectToSet,klase);
-            }else {
-                List<Class> klase = map.get(whichObjectToSet);
-                klase.add(cField);
-                map.put(whichObjectToSet,klase);
+           if(klasaZaKojuSePraviObjekat.isAnnotationPresent(Service.class) && mapClasObjectService.get(klasaZaKojuSePraviObjekat)== null ){
+                Object objectService = klasaZaKojuSePraviObjekat.getDeclaredConstructor().newInstance();
+                mapClasObjectService.put(klasaZaKojuSePraviObjekat,objectService);
+                objects.add(objectService);
             }
-
-            if (verbose) {
-//                  “Initialized <param.object.type> <param.name> in <param.parentClass.name> on <localDateTime.now()> with <param.instance.hashCode>”
-                System.out.println("Initialized " + cField.getTypeName() + " " + cField.getName() + " in " + parentClass.getName() + " on " + LocalDateTime.now() + " with ");
+            if(klasaZaKojuSePraviObjekat.isAnnotationPresent(Component.class)){
+                Object objectComponent = klasaZaKojuSePraviObjekat.getDeclaredConstructor().newInstance();
+                objects.add(objectComponent);
             }
-        }else if(parentClass != null){
-            if(map.get(mapClasObjectController.get(parentClass)) == null){
-                List<Class> klase = new ArrayList<>();
-                klase.add(cField);
-                map.put(mapClasObjectController.get(parentClass),klase);
-            }else {
-                List<Class> klase = map.get(mapClasObjectController.get(parentClass));
-                klase.add(cField);
-                map.put(mapClasObjectController.get(parentClass),klase);
+            if(klasaZaKojuSePraviObjekat.isAnnotationPresent(Bean.class)){
+                Bean bean = (Bean) klasaZaKojuSePraviObjekat.getAnnotation(Bean.class);
+                if(bean.scope().equals(Scope.PROTOTYPE)){
+                    Object objectBean = klasaZaKojuSePraviObjekat.getDeclaredConstructor().newInstance();
+                    objects.add(objectBean);
+                }else{ // anotacija je sington mora se proveriti dal smo vec napravili objekat
+                    boolean foundObjectOfSingletonClass = false;
+                    for (Object o : objects){
+                        if(o.getClass().equals(klasaZaKojuSePraviObjekat)){
+                            foundObjectOfSingletonClass = true;
+                            break;
+                        }
+                    }
+                    if(!foundObjectOfSingletonClass){
+                        Object objectBean = klasaZaKojuSePraviObjekat.getDeclaredConstructor().newInstance();
+                        objects.add(objectBean);
+                    }
+                }
             }
-        }
-        List<Field> fields = Arrays.stream(cField.getDeclaredFields()).filter(field -> field.isAnnotationPresent(Autowired.class)).collect(Collectors.toList());
-        if(fields.isEmpty()){
-
-            objects.add(cField.getDeclaredConstructor().newInstance());
 
         }
-        for(Field field : fields){
+        List<Field> fieldsAnnotatedWithAutowired = Arrays.stream(klasaZaKojuSePraviObjekat.getDeclaredFields()).filter(field -> field.isAnnotationPresent(Autowired.class)).collect(Collectors.toList());
+        for(Field field : fieldsAnnotatedWithAutowired){
+            if(field.getType().isInterface() && !field.isAnnotationPresent(Qualifier.class)){
+                throw new MyException("Atribut " + field.getName() + " je anotiran sa @Autowired a nije sa @Qualifier\n");
+            }
+            if(!field.getType().isAnnotationPresent(Service.class) && !field.getType().isAnnotationPresent(Component.class) && !field.getType().isAnnotationPresent(Bean.class) ){
+                throw new MyException("@Autowired na atributu " + field.getName() + " koji nije @Bean (ili @Service ili @Component)\n");
+            }
             Autowired autowired = field.getAnnotation(Autowired.class);
-            initAutowiredFields(cField, field.getType(), autowired.verbose(), field.getName());
+            initAutoWiredFields(field.getType());
         }
-
-    }
-
-    public Collection<Class> getControllers() {
-        return controllers;
     }
 
     public void mapRequestToMethodOfController(Request request) throws IllegalAccessException {
-
-        for (Map.Entry<Object,List<Class>> entry : map.entrySet()){
-            Object objectToInitializeFields = entry.getKey();
-            List<Field> fields = List.of(objectToInitializeFields.getClass().getDeclaredFields());
-            for (Field f : fields){
-                f.setAccessible(true);
-                f.set(objectToInitializeFields,findObjectOfClass(f.getType()));
-            }
-        }
 
         List<Method> methodsFiltered = new ArrayList<>();
         for(Class controllerClass : controllers){

@@ -50,8 +50,6 @@ public class ServerThread implements Runnable{
                 return;
             }
 
-            Set<Class> allClasses = diEngine.findAllClassesUsingClassLoader("clientCode");
-            diEngine.initializeControllers(allClasses);
             diEngine.mapRequestToMethodOfController(request);
 
             // Response example

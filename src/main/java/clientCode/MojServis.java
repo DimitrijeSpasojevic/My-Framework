@@ -7,7 +7,7 @@ import anotacije.definicije.Service;
 public class MojServis {
 
     @Autowired(verbose = true)
-    private MojBean mojBean;
+    private MojBean mojBean3;
 
     public MojServis(){
         System.out.println("Pozvao se konstruktor ---------------------> MojServis");
