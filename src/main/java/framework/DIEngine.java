@@ -15,17 +15,15 @@ import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.time.LocalDateTime;
 import java.util.*;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.stream.Collectors;
 
 public class DIEngine {
 
-    private Collection<String> controllersNamesList = Collections.synchronizedCollection(new ArrayList<>());
-    private Collection<Class> controllers = Collections.synchronizedCollection(new ArrayList<>());
-    private Map<Class,Object> mapClasObjectController= new ConcurrentHashMap<>();
-    private Map<Class,Object> mapClasObjectService= new ConcurrentHashMap<>();
-    private Map<Object,List<Class>> map= new ConcurrentHashMap<>();
-    private Collection<Object> objects = Collections.synchronizedCollection(new ArrayList<>());
+    private Collection<String> controllersNamesList = new ArrayList<>();
+    private Collection<Class> controllers = new ArrayList<>();
+    private Map<Class,Object> mapClasObjectController= new HashMap<>();
+    private Map<Class,Object> mapClasObjectService= new HashMap<>();
+    private Collection<Object> objects = new ArrayList<>();
     private DependencyContainer container = new DependencyContainer();
     public DIEngine(){
 
@@ -79,9 +77,9 @@ public class DIEngine {
                 }
             }
         }
-        List<Object> objs = new ArrayList<>();
-        objs.addAll(objects);
-        for (Object objectToInitializeFields : objs){
+//        List<Object> objs = new ArrayList<>();
+//        objs.addAll(objects);
+        for (Object objectToInitializeFields : objects){
             List<Field> fields = List.of(objectToInitializeFields.getClass().getDeclaredFields());
             List<Field> autoWiredFields = fields.stream().filter(fi -> fi.isAnnotationPresent(Autowired.class)).collect(Collectors.toList());
             for (Field f : autoWiredFields){
@@ -104,7 +102,6 @@ public class DIEngine {
                 f.set(objectToInitializeFields,objToSet);
                 Autowired autowired = f.getAnnotation(Autowired.class);
                 if(autowired.verbose()) {
-//                  “Initialized <param.object.type> <param.name> in <param.parentClass.name> on <localDateTime.now()> with <param.instance.hashCode>”
                     System.out.println("Initialized " + f.getType() + " " + f.getName() + " in " + objectToInitializeFields.getClass().getName() + " on " + LocalDateTime.now() + " with " + objToSet.hashCode());
                 }
             }
@@ -173,7 +170,6 @@ public class DIEngine {
             if(!field.getType().isAnnotationPresent(Service.class) && !field.getType().isAnnotationPresent(Component.class) && !field.getType().isAnnotationPresent(Bean.class) ){
                 throw new MyException("@Autowired na atributu " + field.getName() + " koji nije @Bean (ili @Service ili @Component)\n");
             }
-            Autowired autowired = field.getAnnotation(Autowired.class);
             initAutoWiredFields(field.getType());
         }
     }
